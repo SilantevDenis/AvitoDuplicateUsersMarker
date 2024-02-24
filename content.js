@@ -1,39 +1,63 @@
-function processUsers() {
-    document.querySelectorAll('a').forEach((el) => {
-      let href = el.getAttribute('href');
-      if (href && href.startsWith('/user/')) {
-        // Проверяем, не добавлена ли уже галочка, чтобы избежать дублирования
-        if (!el.nextElementSibling || !el.nextElementSibling.classList.contains('save-user-checkbox')) {
-          // Создаём чекбокс
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.classList.add('save-user-checkbox'); // Класс для стилизации, если нужно
-          checkbox.style.marginLeft = '5px'; // Добавляем небольшой отступ
+function initialize() {
+    addCheckboxes();
+    markSavedNames();
+  }
+
+// Функция для добавления чекбоксов и их инициализации
+function addCheckboxes() {
+    document.querySelectorAll('a[href^="/user/"]').forEach(el => {
+      let href = el.getAttribute('href').split('?')[0];
+      const fullHref = `https://www.avito.ru${href}`;
   
-          // Добавляем обработчик события на чекбокс
-          checkbox.addEventListener('change', function() {
-            if (this.checked) {
-              const name = el.textContent.trim();
-              const cleanHref = href.split('?')[0]; // Очищаем URL от параметров запроса
-              const fullHref = `https://www.avito.ru${cleanHref}`;
+      // Создаем чекбокс, если он еще не создан
+      if (!el.checkboxAdded) {
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.style.marginLeft = '5px';
   
-              // Отправляем данные в фоновый скрипт для сохранения
-              chrome.runtime.sendMessage({action: "updateUser", href: fullHref, name}, function(response) {
-                if (response === "exists") {
-                  el.style.color = 'red'; // Помечаем имя красным, если уже существует
-                }
-              });
-            }
-          });
+        // Проверяем, сохранена ли ссылка, и устанавливаем состояние чекбокса
+        chrome.runtime.sendMessage({action: "getSavedState", href: fullHref}, function(response) {
+          checkbox.checked = response.isSaved;
+        });
   
-          // Вставляем чекбокс после ссылки
-          el.parentNode.insertBefore(checkbox, el.nextSibling);
-        }
+        // Добавляем обработчик для сохранения/удаления ссылки при изменении состояния чекбокса
+        checkbox.addEventListener('click', function(event) {
+          event.stopPropagation(); // Предотвращаем всплытие события
+          const name = el.textContent.trim();
+          if (checkbox.checked) {
+            // Сохраняем ссылку, если чекбокс активирован
+            chrome.runtime.sendMessage({action: "updateUser", href: fullHref, name});
+          } else {
+            // Удаляем ссылку, если чекбокс деактивирован (если требуется логика удаления)
+            // chrome.runtime.sendMessage({action: "removeUser", href: fullHref});
+          }
+        });
+  
+        el.insertAdjacentElement('afterend', checkbox);
+        el.checkboxAdded = true; // Помечаем, что чекбокс добавлен
       }
     });
   }
   
-  // Вызываем функцию при загрузке страницы и при каждом изменении DOM
-  processUsers();
-  new MutationObserver(processUsers).observe(document.body, { childList: true, subtree: true });
+
+  function markSavedNames() {
+    // Находим все имена на странице. Этот селектор нужно будет адаптировать под вашу структуру страницы.
+    document.querySelectorAll('a[href^="/user/"]').forEach(el => {
+      const name = el.textContent.trim();
   
+      // Отправляем запрос в background.js для проверки, сохранено ли имя в базе
+      chrome.runtime.sendMessage({action: "checkName", name: name}, function(response) {
+        if (response.isSaved) {
+          // Если имя найдено в базе, отмечаем его красным цветом
+          el.style.color = 'red';
+        }
+      });
+    });
+  }
+  
+
+  
+
+  // Инициализация и наблюдение за изменениями DOM
+document.addEventListener('DOMContentLoaded', initialize);
+new MutationObserver(initialize).observe(document.body, { childList: true, subtree: true });

@@ -24,4 +24,21 @@ chrome.runtime.onInstalled.addListener(() => {
       }
     }
   );
+
+  chrome.runtime.onMessage.addListener(
+    function(request, sender, sendResponse) {
+      if (request.action === "checkName") {
+        chrome.storage.local.get(['users'], function(result) {
+          let users = result.users || {};
+          // Предполагаем, что имена пользователей используются в качестве значений. Нужно адаптировать эту логику под вашу структуру данных.
+          let isSaved = Object.values(users).includes(request.name);
+          sendResponse({isSaved: isSaved});
+        });
+        return true; // Возврат true для асинхронного ответа
+      }
+    }
+  );
+  
+
+  
   
